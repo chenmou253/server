@@ -2,6 +2,7 @@ package router
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 
@@ -12,7 +13,7 @@ import (
 	"go-admin/server/internal/service"
 )
 
-func New(cfg *config.Config, repo *repository.Repository, authHandler *handler.AuthHandler, systemHandler *handler.SystemHandler, publicHandler *handler.PublicHandler, rbac *service.RBACService) *gin.Engine {
+func New(cfg *config.Config, repo *repository.Repository, redisClient *redis.Client, authHandler *handler.AuthHandler, systemHandler *handler.SystemHandler, publicHandler *handler.PublicHandler, rbac *service.RBACService) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.Use(middleware.RequestLogger(repo))
@@ -33,7 +34,7 @@ func New(cfg *config.Config, repo *repository.Repository, authHandler *handler.A
 		open.POST("/devices/:deviceNo/status", publicHandler.UpdateDeviceStatus)
 
 		protected := api.Group("")
-		protected.Use(middleware.JWTAuth(cfg, rbac))
+		protected.Use(middleware.JWTAuth(cfg, redisClient, rbac))
 		protected.GET("/auth/profile", authHandler.Profile)
 		protected.POST("/auth/logout", authHandler.Logout)
 

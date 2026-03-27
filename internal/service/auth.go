@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"time"
 
@@ -55,6 +57,16 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (*model.
 	if err != nil {
 		return nil, nil, err
 	}
+	if claims.TokenType != "refresh" {
+		return nil, nil, fmt.Errorf("invalid refresh token")
+	}
+	activeSessionID, err := s.redis.Get(ctx, s.sessionKey(claims.UserID)).Result()
+	if err != nil {
+		return nil, nil, err
+	}
+	if activeSessionID != claims.SessionID {
+		return nil, nil, fmt.Errorf("session expired")
+	}
 	key := s.refreshTokenKey(claims.UserID)
 	storedToken, err := s.redis.Get(ctx, key).Result()
 	if err != nil {
@@ -75,19 +87,26 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (*model.
 }
 
 func (s *AuthService) Logout(ctx context.Context, userID uint) error {
-	return s.redis.Del(ctx, s.refreshTokenKey(userID)).Err()
+	return s.redis.Del(ctx, s.refreshTokenKey(userID), s.sessionKey(userID)).Err()
 }
 
 func (s *AuthService) issueTokenPair(ctx context.Context, user *model.User) (*TokenPair, error) {
 	accessExpire := time.Duration(s.config.JWTAccessExpireMinute) * time.Minute
 	refreshExpire := time.Duration(s.config.JWTRefreshExpireHour) * time.Hour
-
-	accessToken, err := jwtx.Generate(s.config.JWTSecret, user.ID, user.Username, accessExpire)
+	sessionID, err := generateSessionID()
 	if err != nil {
 		return nil, err
 	}
-	refreshToken, err := jwtx.Generate(s.config.JWTSecret, user.ID, user.Username, refreshExpire)
+
+	accessToken, err := jwtx.Generate(s.config.JWTSecret, user.ID, user.Username, sessionID, "access", accessExpire)
 	if err != nil {
+		return nil, err
+	}
+	refreshToken, err := jwtx.Generate(s.config.JWTSecret, user.ID, user.Username, sessionID, "refresh", refreshExpire)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.redis.Set(ctx, s.sessionKey(user.ID), sessionID, refreshExpire).Err(); err != nil {
 		return nil, err
 	}
 	if err := s.redis.Set(ctx, s.refreshTokenKey(user.ID), refreshToken, refreshExpire).Err(); err != nil {
@@ -102,4 +121,16 @@ func (s *AuthService) issueTokenPair(ctx context.Context, user *model.User) (*To
 
 func (s *AuthService) refreshTokenKey(userID uint) string {
 	return fmt.Sprintf("refresh_token:%d", userID)
+}
+
+func (s *AuthService) sessionKey(userID uint) string {
+	return fmt.Sprintf("session:%d", userID)
+}
+
+func generateSessionID() (string, error) {
+	buf := make([]byte, 16)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(buf), nil
 }

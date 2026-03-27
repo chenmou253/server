@@ -52,6 +52,7 @@ func NewApp() (*App, error) {
 	engine := router.New(
 		cfg,
 		repo,
+		redisClient,
 		handler.NewAuthHandler(authService, rbacService),
 		handler.NewSystemHandler(systemService, cfg),
 		handler.NewPublicHandler(publicService),

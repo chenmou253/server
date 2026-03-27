@@ -1,9 +1,11 @@
 package middleware
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 
 	"go-admin/server/internal/config"
 	"go-admin/server/internal/contextx"
@@ -12,7 +14,7 @@ import (
 	"go-admin/server/pkg/response"
 )
 
-func JWTAuth(cfg *config.Config, rbac *service.RBACService) gin.HandlerFunc {
+func JWTAuth(cfg *config.Config, redisClient *redis.Client, rbac *service.RBACService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		token := strings.TrimPrefix(c.GetHeader("Authorization"), "Bearer ")
 		if token == "" {
@@ -23,6 +25,17 @@ func JWTAuth(cfg *config.Config, rbac *service.RBACService) gin.HandlerFunc {
 		claims, err := jwtx.Parse(cfg.JWTSecret, token)
 		if err != nil {
 			response.Error(c, 401, "token invalid")
+			c.Abort()
+			return
+		}
+		if claims.TokenType != "access" {
+			response.Error(c, 401, "token invalid")
+			c.Abort()
+			return
+		}
+		activeSessionID, err := redisClient.Get(c.Request.Context(), fmt.Sprintf("session:%d", claims.UserID)).Result()
+		if err != nil || activeSessionID != claims.SessionID {
+			response.Error(c, 401, "session expired")
 			c.Abort()
 			return
 		}
