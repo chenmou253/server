@@ -54,7 +54,7 @@ type Device struct {
 	ID         uint   `gorm:"primaryKey;column:id" json:"id"`
 	DeviceNo   string `gorm:"column:device_no" json:"deviceNo"`
 	MerchantID string `gorm:"column:merchant_id" json:"merchantId"`
-	Status     uint8  `gorm:"column:status" json:"status"`
+	Status     uint8  `gorm:"column:status" json:"status" comment:"设备状态0待机1接单"`
 	IP         string `gorm:"column:ip" json:"ip"`
 	CreateT    uint64 `gorm:"column:create_t" json:"createT"`
 }

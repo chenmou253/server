@@ -17,7 +17,7 @@ const docTemplate = `{
     "paths": {
         "/api/v1/open/devices": {
             "post": {
-                "description": "向 device 表插入一条设备记录。\n\n请求头鉴权说明：\n- X-API-Key: 开放接口访问标识\n- X-Timestamp: 秒级 Unix 时间戳\n- X-Nonce: 每次请求唯一随机串\n- X-Signature: 按 apiKey\\ntimestamp\\nnonce\\nMETHOD\\n/path\\nsha256(body)\\nsecret 规则生成的 SHA256 签名\n\n业务说明：\n- deviceNo 重复时禁止注册",
+                "description": "向 device 表插入一条设备记录。\n\n请求头鉴权说明：\n- X-API-Key: 开放接口访问标识\n- X-Timestamp: 秒级 Unix 时间戳\n- X-Nonce: 每次请求唯一随机串\n- X-Signature: 按 apiKey\\ntimestamp\\nnonce\\nMETHOD\\n/path\\nsha256(body)\\nsecret 规则生成的 SHA256 签名\n\n业务说明：\n- deviceNo 重复时默认返回已存在记录，视为注册成功",
                 "consumes": [
                     "application/json"
                 ],
@@ -63,7 +63,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/go-admin_server_internal_service.RegisterDevicePayload"
+                            "$ref": "#/definitions/service.RegisterDevicePayload"
                         }
                     }
                 ],
@@ -71,19 +71,91 @@ const docTemplate = `{
                     "200": {
                         "description": "注册成功",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.registerDeviceSwaggerResponse"
+                            "$ref": "#/definitions/handler.deviceSwaggerResponse"
                         }
                     },
                     "400": {
-                        "description": "参数错误或设备号重复",
+                        "description": "参数错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.errorSwaggerResponse"
+                            "$ref": "#/definitions/handler.errorSwaggerResponse"
                         }
                     },
                     "401": {
                         "description": "鉴权失败",
                         "schema": {
-                            "$ref": "#/definitions/internal_handler.errorSwaggerResponse"
+                            "$ref": "#/definitions/handler.errorSwaggerResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/open/devices/{deviceNo}": {
+            "get": {
+                "description": "根据 deviceNo 查询单个设备信息。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "开放设备接口"
+                ],
+                "summary": "查询设备",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "开放接口访问标识",
+                        "name": "X-API-Key",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "秒级 Unix 时间戳",
+                        "name": "X-Timestamp",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "请求唯一随机串",
+                        "name": "X-Nonce",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "SHA256 签名值",
+                        "name": "X-Signature",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "设备编号",
+                        "name": "deviceNo",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "查询成功",
+                        "schema": {
+                            "$ref": "#/definitions/handler.deviceSwaggerResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "鉴权失败",
+                        "schema": {
+                            "$ref": "#/definitions/handler.errorSwaggerResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "设备不存在",
+                        "schema": {
+                            "$ref": "#/definitions/handler.errorSwaggerResponse"
                         }
                     }
                 }
@@ -91,30 +163,98 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "go-admin_server_internal_model.Device": {
+        "handler.deviceSwaggerData": {
             "type": "object",
             "properties": {
                 "createT": {
-                    "type": "integer"
+                    "description": "设备创建时间，Unix 毫秒时间戳",
+                    "type": "integer",
+                    "example": 1711699200000
                 },
                 "deviceNo": {
-                    "type": "string"
+                    "description": "设备编号",
+                    "type": "string",
+                    "example": "DVC202603290001"
                 },
                 "id": {
-                    "type": "integer"
+                    "description": "设备主键 ID",
+                    "type": "integer",
+                    "example": 1
                 },
                 "ip": {
-                    "type": "string"
+                    "description": "设备上报的客户端 IP",
+                    "type": "string",
+                    "example": "192.168.1.10"
                 },
                 "merchantId": {
-                    "type": "string"
+                    "description": "商户编号",
+                    "type": "string",
+                    "example": "M10001"
                 },
                 "status": {
-                    "type": "integer"
+                    "description": "设备状态。0 表示待机，1 表示接单中",
+                    "type": "integer",
+                    "enum": [
+                        0,
+                        1
+                    ],
+                    "example": 1
                 }
             }
         },
-        "go-admin_server_internal_service.RegisterDevicePayload": {
+        "handler.deviceSwaggerResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "$ref": "#/definitions/handler.deviceSwaggerData"
+                },
+                "message": {
+                    "type": "string",
+                    "example": "ok"
+                }
+            }
+        },
+        "handler.errorSwaggerData": {
+            "type": "object",
+            "properties": {
+                "detail": {
+                    "description": "详细错误说明",
+                    "type": "string",
+                    "example": "device not found"
+                },
+                "deviceNo": {
+                    "description": "相关设备编号。仅在设备相关错误时返回",
+                    "type": "string",
+                    "example": "DVC202603290001"
+                },
+                "reason": {
+                    "description": "错误原因标识",
+                    "type": "string",
+                    "example": "device_not_found"
+                }
+            }
+        },
+        "handler.errorSwaggerResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer",
+                    "example": 404
+                },
+                "data": {
+                    "$ref": "#/definitions/handler.errorSwaggerData"
+                },
+                "message": {
+                    "type": "string",
+                    "example": "device not found"
+                }
+            }
+        },
+        "service.RegisterDevicePayload": {
             "type": "object",
             "required": [
                 "deviceNo",
@@ -125,31 +265,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "merchantId": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_handler.errorSwaggerResponse": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "integer"
-                },
-                "message": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_handler.registerDeviceSwaggerResponse": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "integer"
-                },
-                "data": {
-                    "$ref": "#/definitions/go-admin_server_internal_model.Device"
-                },
-                "message": {
                     "type": "string"
                 }
             }

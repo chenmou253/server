@@ -1,7 +1,9 @@
 package config
 
 import (
+	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/joho/godotenv"
@@ -24,7 +26,15 @@ type Config struct {
 }
 
 func Load() (*Config, error) {
-	_ = godotenv.Load()
+	wd, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("get working directory: %w", err)
+	}
+
+	envPath := filepath.Join(wd, ".env")
+	if err := godotenv.Overload(envPath); err != nil {
+		return nil, fmt.Errorf("load env file %s: %w", envPath, err)
+	}
 
 	return &Config{
 		AppName:               getEnv("APP_NAME", "go-admin"),

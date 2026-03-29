@@ -1,20 +1,72 @@
 definitions:
-  go-admin_server_internal_model.Device:
+  handler.deviceSwaggerData:
     properties:
       createT:
+        description: 设备创建时间，Unix 毫秒时间戳
+        example: 1711699200000
         type: integer
       deviceNo:
+        description: 设备编号
+        example: DVC202603290001
         type: string
       id:
+        description: 设备主键 ID
+        example: 1
         type: integer
       ip:
+        description: 设备上报的客户端 IP
+        example: 192.168.1.10
         type: string
       merchantId:
+        description: 商户编号
+        example: M10001
         type: string
       status:
+        description: 设备状态。0 表示待机，1 表示接单中
+        enum:
+        - 0
+        - 1
+        example: 1
         type: integer
     type: object
-  go-admin_server_internal_service.RegisterDevicePayload:
+  handler.deviceSwaggerResponse:
+    properties:
+      code:
+        example: 0
+        type: integer
+      data:
+        $ref: '#/definitions/handler.deviceSwaggerData'
+      message:
+        example: ok
+        type: string
+    type: object
+  handler.errorSwaggerData:
+    properties:
+      detail:
+        description: 详细错误说明
+        example: device not found
+        type: string
+      deviceNo:
+        description: 相关设备编号。仅在设备相关错误时返回
+        example: DVC202603290001
+        type: string
+      reason:
+        description: 错误原因标识
+        example: device_not_found
+        type: string
+    type: object
+  handler.errorSwaggerResponse:
+    properties:
+      code:
+        example: 404
+        type: integer
+      data:
+        $ref: '#/definitions/handler.errorSwaggerData'
+      message:
+        example: device not found
+        type: string
+    type: object
+  service.RegisterDevicePayload:
     properties:
       deviceNo:
         type: string
@@ -23,22 +75,6 @@ definitions:
     required:
     - deviceNo
     - merchantId
-    type: object
-  internal_handler.errorSwaggerResponse:
-    properties:
-      code:
-        type: integer
-      message:
-        type: string
-    type: object
-  internal_handler.registerDeviceSwaggerResponse:
-    properties:
-      code:
-        type: integer
-      data:
-        $ref: '#/definitions/go-admin_server_internal_model.Device'
-      message:
-        type: string
     type: object
 info:
   contact: {}
@@ -57,7 +93,7 @@ paths:
         - X-Signature: 按 apiKey\ntimestamp\nnonce\nMETHOD\n/path\nsha256(body)\nsecret 规则生成的 SHA256 签名
 
         业务说明：
-        - deviceNo 重复时禁止注册
+        - deviceNo 重复时默认返回已存在记录，视为注册成功
       parameters:
       - description: 开放接口访问标识
         in: header
@@ -84,23 +120,72 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/go-admin_server_internal_service.RegisterDevicePayload'
+          $ref: '#/definitions/service.RegisterDevicePayload'
       produces:
       - application/json
       responses:
         "200":
           description: 注册成功
           schema:
-            $ref: '#/definitions/internal_handler.registerDeviceSwaggerResponse'
+            $ref: '#/definitions/handler.deviceSwaggerResponse'
         "400":
-          description: 参数错误或设备号重复
+          description: 参数错误
           schema:
-            $ref: '#/definitions/internal_handler.errorSwaggerResponse'
+            $ref: '#/definitions/handler.errorSwaggerResponse'
         "401":
           description: 鉴权失败
           schema:
-            $ref: '#/definitions/internal_handler.errorSwaggerResponse'
+            $ref: '#/definitions/handler.errorSwaggerResponse'
       summary: 设备注册
+      tags:
+      - 开放设备接口
+  /api/v1/open/devices/{deviceNo}:
+    get:
+      consumes:
+      - application/json
+      description: 根据 deviceNo 查询单个设备信息。
+      parameters:
+      - description: 开放接口访问标识
+        in: header
+        name: X-API-Key
+        required: true
+        type: string
+      - description: 秒级 Unix 时间戳
+        in: header
+        name: X-Timestamp
+        required: true
+        type: string
+      - description: 请求唯一随机串
+        in: header
+        name: X-Nonce
+        required: true
+        type: string
+      - description: SHA256 签名值
+        in: header
+        name: X-Signature
+        required: true
+        type: string
+      - description: 设备编号
+        in: path
+        name: deviceNo
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 查询成功
+          schema:
+            $ref: '#/definitions/handler.deviceSwaggerResponse'
+        "401":
+          description: 鉴权失败
+          schema:
+            $ref: '#/definitions/handler.errorSwaggerResponse'
+        "404":
+          description: 设备不存在
+          schema:
+            $ref: '#/definitions/handler.errorSwaggerResponse'
+      summary: 查询设备
       tags:
       - 开放设备接口
 swagger: "2.0"

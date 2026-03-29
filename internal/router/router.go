@@ -39,6 +39,7 @@ func New(cfg *config.Config, repo *repository.Repository, redisClient *redis.Cli
 		protected.POST("/auth/logout", authHandler.Logout)
 
 		system := protected.Group("/system")
+		system.Use(middleware.JWTAuth(cfg, redisClient, rbac))
 		system.GET("/menus", systemHandler.ListMenus)
 		system.POST("/menus", middleware.RequirePermission("menu:save"), systemHandler.SaveMenu)
 		system.DELETE("/menus/:id", middleware.RequirePermission("menu:save"), systemHandler.DeleteMenu)

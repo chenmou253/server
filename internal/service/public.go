@@ -2,11 +2,14 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"go-admin/server/internal/model"
 	"go-admin/server/internal/repository"
+	"gorm.io/gorm"
 )
 
 type PublicService struct {
@@ -77,9 +80,19 @@ func (s *PublicService) UpdateDeviceStatus(ctx context.Context, deviceNo string,
 }
 
 func (s *PublicService) RegisterDevice(ctx context.Context, payload RegisterDevicePayload, clientIP string) (*model.Device, error) {
+	deviceNo := strings.TrimSpace(payload.DeviceNo)
+	merchantID := strings.TrimSpace(payload.MerchantID)
+	existing, err := s.repo.GetDeviceByDeviceNo(ctx, deviceNo)
+	if err == nil {
+		return existing, nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+
 	device := &model.Device{
-		DeviceNo:   payload.DeviceNo,
-		MerchantID: payload.MerchantID,
+		DeviceNo:   deviceNo,
+		MerchantID: merchantID,
 		Status:     0,
 		IP:         clientIP,
 		CreateT:    uint64(time.Now().UnixMilli()),

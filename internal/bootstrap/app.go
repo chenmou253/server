@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -26,13 +27,22 @@ type App struct {
 func NewApp() (*App, error) {
 	cfg, err := config.Load()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load config: %w", err)
 	}
 	log := logger.New()
+	log.Printf("mysql addr: %s", cfg.MySQLDSN)
+	log.Printf("redis addr: %s", cfg.RedisAddr)
 
 	db, err := gorm.Open(mysql.Open(cfg.MySQLDSN), &gorm.Config{})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("connect mysql: %w", err)
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, fmt.Errorf("init mysql db handle: %w", err)
+	}
+	if err := sqlDB.PingContext(context.Background()); err != nil {
+		return nil, fmt.Errorf("ping mysql: %w", err)
 	}
 	redisClient := redis.NewClient(&redis.Options{
 		Addr:     cfg.RedisAddr,
@@ -40,7 +50,13 @@ func NewApp() (*App, error) {
 		DB:       cfg.RedisDB,
 	})
 	if err := redisClient.Ping(context.Background()).Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf(
+			"ping redis addr=%s db=%d password_set=%t: %w; check redis protected-mode/bind/requirepass and server firewall",
+			cfg.RedisAddr,
+			cfg.RedisDB,
+			strings.TrimSpace(cfg.RedisPassword) != "",
+			err,
+		)
 	}
 
 	repo := repository.New(db)
