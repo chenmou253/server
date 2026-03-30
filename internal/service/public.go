@@ -9,6 +9,7 @@ import (
 
 	"go-admin/server/internal/model"
 	"go-admin/server/internal/repository"
+
 	"gorm.io/gorm"
 )
 
@@ -88,6 +89,10 @@ func (s *PublicService) RegisterDevice(ctx context.Context, payload RegisterDevi
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
+	}
+
+	if existing.ID != 0 {
+		return existing, nil
 	}
 
 	device := &model.Device{
